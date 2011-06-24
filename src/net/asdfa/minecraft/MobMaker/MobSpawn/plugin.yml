@@ -3,6 +3,19 @@ main: net.asdfa.minecraft.MobMaker.MobSpawn.MobMMain
 version: 0.1
 
 commands:
+  spawnwolf:
+    discription: Spawn a wolf at a player's location
+    usage: /spawnwolf
+    
+  spawntamewolf:
+    discription: Spawn a wolf at a player's location tamed by that player
+    usage: /spawntamewolf
+    
+  spawntamewolves:
+    discription: Spawn a number of wolves at a player's location tamed by that player
+    usage: /spawntamewolves <number of wolves>
+   
+   
   
   
 
