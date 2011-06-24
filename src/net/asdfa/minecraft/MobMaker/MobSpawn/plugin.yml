@@ -1,0 +1,8 @@
+name: MobMaker Main
+main: net.asdfa.minecraft.MobMaker.MobSpawn.MobMMain
+version: 0.1
+
+commands:
+  
+  
+
