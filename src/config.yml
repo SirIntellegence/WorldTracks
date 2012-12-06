@@ -2,3 +2,5 @@ proximity:
   hurtAmount: 1
   healAmount: 1
   checkTicks: 20
+  
+perpetualTrackStack: true
