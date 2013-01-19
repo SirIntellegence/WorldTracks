@@ -4,6 +4,9 @@
  */
 package net.asdfa.minecraft.WorldTracks.TrackMaker;
 
+
+import org.apache.commons.collections.buffer.PriorityBuffer;
+import org.apache.commons.collections.comparators.ComparableComparator;
 import org.bukkit.entity.Player;
 /**
  *
@@ -18,6 +21,7 @@ public class TrackMaker {
      * @return
      */
     public void makeTrack(Player player){
+	PriorityBuffer openList = new PriorityBuffer(ComparableComparator.getInstance());
 	
     }
 }
