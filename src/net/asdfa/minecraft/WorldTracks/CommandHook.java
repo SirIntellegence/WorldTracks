@@ -7,6 +7,7 @@ package net.asdfa.minecraft.WorldTracks;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -23,7 +24,9 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
@@ -46,6 +49,7 @@ public class CommandHook extends JavaPlugin implements Listener{
     final boolean debug = true;
     ConsoleCommandSender console;// = getServer().getConsoleSender();
     
+    
     private FileConfiguration customConfig = null;
     private File customConfigFile = null;
     
@@ -62,7 +66,7 @@ public class CommandHook extends JavaPlugin implements Listener{
 	log.log(Level.INFO, "TrackMaker version {0} is enabled!", pdfFile.getVersion());
 	trackMaker = new TrackMaker();
 	playerProximity = new HashMap<Player, Boolean>();
-	hurtTaskID = this.getServer().getScheduler().scheduleAsyncRepeatingTask(this, 
+	hurtTaskID = this.getServer().getScheduler().scheduleSyncRepeatingTask(this,
 		new Runnable (){
 		    public void run(){
 			hurtPlayers();
@@ -84,7 +88,9 @@ public class CommandHook extends JavaPlugin implements Listener{
 		    p.damage(hurtAmount);
 	    }
 	    else{
-		if (healAmount != 0)
+		if (healAmount != 0 && !getConfig().
+			getStringList("proximity.ignoredWorlds").
+			contains(p.getWorld().getName()))
 		    if (p.getHealth() < 20){
 			int amount = p.getHealth() + healAmount;
 			if (amount > 20)
@@ -193,8 +199,49 @@ public class CommandHook extends JavaPlugin implements Listener{
     @EventHandler(priority= EventPriority.MONITOR)
     void blockCheck(BlockBreakEvent args){
 	if (isBlockTypeTrack(args.getBlock().getType())){
-	    if (playerProximity.get(args.getPlayer()))
-		TrackDetect(args.getPlayer());
+	    if (playerProximity.get(args.getPlayer())){
+		final Player player = args.getPlayer();
+		getServer().getScheduler().scheduleSyncDelayedTask(this, new Runnable() {
+		@Override
+		public void run() {TrackDetect(player);}
+	    });
+	    }
+	}
+    }
+    
+    //@EventHandler(priority= EventPriority.MONITOR)
+    void blockCheck(BlockEvent args){
+	if (isTrackBlock(args.getBlock()))
+	    log.info("Track block was modified!");
+	if (args instanceof BlockBreakEvent){
+	    blockCheck((BlockBreakEvent)args);
+	}
+    }
+    
+    @EventHandler(priority= EventPriority.MONITOR)
+    void asplosion(EntityExplodeEvent args){
+	List<Block> blocks = args.blockList();
+	List<Block> trackBlocks = new ArrayList<Block>();
+	for (Block block : blocks){
+	    if (isBlockTypeTrack(block.getType()))
+		trackBlocks.add(block);
+	}
+	if (trackBlocks.size() > 0){
+	    Location location = args.getLocation();
+	    World world = location.getWorld();
+	    // find the furthest block
+	    LocationRange range = new LocationRange(location, getConfig().
+		    getInt("proximity.checkDistance") +
+		    (int)Math.floor(getFurthest(location, trackBlocks)));
+	    List<Player> worldPlayers = world.getPlayers();
+	    final List<Player> affectedPlayers = range.getThoseInRange(worldPlayers);
+	    getServer().getScheduler().scheduleSyncDelayedTask(this, new Runnable() {
+		@Override
+		public void run() {
+		    for (Player player : affectedPlayers)
+			TrackDetect(player);
+		}
+	    });
 	}
     }
     
@@ -308,6 +355,10 @@ public class CommandHook extends JavaPlugin implements Listener{
     private void TrackDetect(Player player, Vector to) {
 	// check all nearby blocks
 	World world = player.getWorld();
+	if (getConfig().getStringList("proximity.ignoredWorlds").contains(world.getName())){
+	    playerProximity.put(player, true);
+	    return;
+	}
 	boolean lastValue;// = playerProximity.get(player);
 	boolean hadValue = true;
 	if (playerProximity.containsKey(player))
@@ -315,8 +366,8 @@ public class CommandHook extends JavaPlugin implements Listener{
 	else
 	    lastValue = hadValue = false;
 	    
-	final int range = 9; //9x9x9 cube to search
-	int subrange = (int)Math.floor(range/2);
+	final int range = getConfig().getInt("proximity.checkDistance");
+	int subrange = range;
 	boolean trackNearby = false;
 	trackSearch:
 	for(int i = -subrange; i <= subrange; i++)
@@ -417,5 +468,33 @@ public class CommandHook extends JavaPlugin implements Listener{
     private void givePlayerTrack(Player player) {
 	player.getInventory().addItem(new ItemStack(Material.RAILS, 64),
 				      new ItemStack(Material.POWERED_RAIL, 64));
+    }
+    
+    private double getFurthest(Location target, List<? extends Block> blocks){
+	double largest = 0;
+	Location absoluteTarget = target.clone();
+	absoluteValue(absoluteTarget);
+	for (Block block : blocks){
+	    Location diff = absoluteValue(block.getLocation().clone());
+	    Location result = absoluteValue(absoluteTarget.clone().subtract(diff));
+	    
+	    if (result.getX() > largest)
+		largest = result.getX();
+	    if (result.getY() > largest)
+		largest = result.getY();
+	    if (result.getY() > largest)
+		largest = result.getY();
+	}
+	return largest;
+    }
+    
+    private Location absoluteValue(Location location){
+	if (location.getX() < 0)
+	    location.setX(location.getX() * -1);
+	if (location.getY() < 0)
+	    location.setY(location.getY() * -1);
+	if (location.getZ() < 0)
+	    location.setZ(location.getZ() * -1);
+	return location;
     }
 }
