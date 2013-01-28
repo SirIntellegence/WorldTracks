@@ -46,7 +46,7 @@ import org.bukkit.util.Vector;
  */
 public class CommandHook extends JavaPlugin implements Listener{
     static final Logger log = Logger.getLogger("minecraft");
-    final boolean debug = true;
+    public static final boolean debug = true;
     ConsoleCommandSender console;// = getServer().getConsoleSender();
     
     
@@ -160,16 +160,13 @@ public class CommandHook extends JavaPlugin implements Listener{
 
 	return false;
     }
-    Vector roundLocation(Location location){
-	return new Vector(location.getBlockX(),location.getBlockY(), location.getBlockZ());
-    }
     
     @EventHandler(priority = EventPriority.MONITOR)
     void onPlayerMove(PlayerMoveEvent movement){
 	Player player = movement.getPlayer();
 	World world = player.getWorld();
-	Vector to = roundLocation(movement.getTo());
-	Vector from = roundLocation(movement.getFrom());
+	Vector to = Util.roundLocation(movement.getTo());
+	Vector from = Util.roundLocation(movement.getFrom());
 	
 	Vector result = to.clone();
 	result.subtract(from);
@@ -198,7 +195,7 @@ public class CommandHook extends JavaPlugin implements Listener{
     
     @EventHandler(priority= EventPriority.MONITOR)
     void blockCheck(BlockBreakEvent args){
-	if (isBlockTypeTrack(args.getBlock().getType())){
+	if (Util.isBlockTypeTrack(args.getBlock().getType())){
 	    if (playerProximity.get(args.getPlayer())){
 		final Player player = args.getPlayer();
 		getServer().getScheduler().scheduleSyncDelayedTask(this, new Runnable() {
@@ -211,7 +208,7 @@ public class CommandHook extends JavaPlugin implements Listener{
     
     //@EventHandler(priority= EventPriority.MONITOR)
     void blockCheck(BlockEvent args){
-	if (isTrackBlock(args.getBlock()))
+	if (Util.isTrackBlock(args.getBlock()))
 	    log.info("Track block was modified!");
 	if (args instanceof BlockBreakEvent){
 	    blockCheck((BlockBreakEvent)args);
@@ -222,17 +219,14 @@ public class CommandHook extends JavaPlugin implements Listener{
     void asplosion(EntityExplodeEvent args){
 	List<Block> blocks = args.blockList();
 	List<Block> trackBlocks = new ArrayList<Block>();
-	for (Block block : blocks){
-	    if (isBlockTypeTrack(block.getType()))
-		trackBlocks.add(block);
-	}
+	Util.getTrackBlocksInList(blocks, trackBlocks);
 	if (trackBlocks.size() > 0){
 	    Location location = args.getLocation();
 	    World world = location.getWorld();
 	    // find the furthest block
 	    LocationRange range = new LocationRange(location, getConfig().
 		    getInt("proximity.checkDistance") +
-		    (int)Math.floor(getFurthest(location, trackBlocks)));
+		    (int)Math.floor(Util.getFurthest(location, trackBlocks)));
 	    List<Player> worldPlayers = world.getPlayers();
 	    final List<Player> affectedPlayers = range.getThoseInRange(worldPlayers);
 	    getServer().getScheduler().scheduleSyncDelayedTask(this, new Runnable() {
@@ -247,7 +241,7 @@ public class CommandHook extends JavaPlugin implements Listener{
     
     @EventHandler(priority= EventPriority.MONITOR, ignoreCancelled=false)
     void perpetualTrackStack(BlockPlaceEvent args){
-	if (getConfig().getBoolean("perpetualTrackStack") && isProvidedTrack(args.getBlockPlaced())){
+	if (getConfig().getBoolean("perpetualTrackStack") && Util.isProvidedTrack(args.getBlockPlaced())){
 	    Player player = args.getPlayer();
 	    Material type = args.getBlockPlaced().getType();
 	    PlayerInventory inventory = player.getInventory();
@@ -260,7 +254,7 @@ public class CommandHook extends JavaPlugin implements Listener{
 		trackStack.setType(type);
 	    trackStack.setAmount(64);
 	}
-	if (isTrackBlock(args.getBlock())){
+	if (Util.isTrackBlock(args.getBlock())){
 	    if (!playerProximity.get(args.getPlayer()))
 		TrackDetect(args.getPlayer());
 	}
@@ -268,13 +262,13 @@ public class CommandHook extends JavaPlugin implements Listener{
     
     @EventHandler(priority= EventPriority.HIGHEST, ignoreCancelled=false)
     void perpetualTrackStack(PlayerPickupItemEvent args){
-	if (isProvidedTrack(args.getItem().getItemStack())){
+	if (Util.isProvidedTrack(args.getItem().getItemStack())){
 	    Player player = args.getPlayer();
 	    Item item = args.getItem();
 	    Material trackType = item.getItemStack().getType();
 	    int inventorySlot = -1;
 	    ItemStack trackStack = null;
-	    for (ItemStack stack : getHotBarItems(player.getInventory()))
+	    for (ItemStack stack : Util.getHotBarItems(player.getInventory()))
 		if (stack != null && stack.getType() == trackType){
 		    trackStack = stack;
 		    break;
@@ -293,7 +287,7 @@ public class CommandHook extends JavaPlugin implements Listener{
     
     @EventHandler(priority= EventPriority.LOW)
     void perpetualTrackStack(InventoryClickEvent args){
-	if (isProvidedTrack(args.getCurrentItem())){
+	if (Util.isProvidedTrack(args.getCurrentItem())){
 	    Player player = (Player)args.getWhoClicked();
 	    ItemStack stack = args.getCurrentItem();
 	    if (stack.getAmount()!=64){
@@ -302,7 +296,7 @@ public class CommandHook extends JavaPlugin implements Listener{
 	    }
 	    
 	}
-	else if (isProvidedTrack(args.getCursor())){
+	else if (Util.isProvidedTrack(args.getCursor())){
 	    if (args.isLeftClick()){
 		ItemStack cursor = args.getCursor();
 		Player player = (Player)args.getWhoClicked();
@@ -318,30 +312,7 @@ public class CommandHook extends JavaPlugin implements Listener{
     
     @EventHandler(priority= EventPriority.LOWEST)
     void perpetualTrackStack(PlayerRespawnEvent args){
-	givePlayerTrack(args.getPlayer());
-    }
-    
-    boolean isProvidedTrack(ItemStack stack){
-	if (stack == null)
-	    return false;
-	else
-	    return isProvidedTrack(stack.getType());
-    }
-    
-    boolean isProvidedTrack(Block block){
-	return isProvidedTrack(block.getType());
-    }
-    
-    boolean isProvidedTrack(Material type){
-	return type == Material.RAILS || type == Material.POWERED_RAIL;
-    }
-    
-    boolean isTrackBlock(Block block){
-	return isBlockTypeTrack(block.getType());
-    }
-    
-    boolean isBlockTypeTrack(Material type){
-	return type == Material.RAILS || type == Material.POWERED_RAIL || type == Material.DETECTOR_RAIL;
+	Util.givePlayerTrack(args.getPlayer());
     }
     
     private void showHelp(CommandSender sender){
@@ -349,7 +320,7 @@ public class CommandHook extends JavaPlugin implements Listener{
     }
     
     void TrackDetect(Player player){
-	TrackDetect(player, roundLocation(player.getLocation()));
+	TrackDetect(player, Util.roundLocation(player.getLocation()));
     }
 
     private void TrackDetect(Player player, Vector to) {
@@ -376,8 +347,10 @@ public class CommandHook extends JavaPlugin implements Listener{
 		    Block checkBlock = world.getBlockAt(i + to.getBlockX(),
 					 j + to.getBlockY(),
 					 k + to.getBlockZ());
-		    trackNearby = isTrackBlock(checkBlock);
+		    trackNearby = Util.isTrackBlock(checkBlock);
 		    if (trackNearby){
+			if (!trackMaker.lastTrackBlockNearby.containsKey(player))
+			    trackMaker.lastTrackBlockNearby.put(player, checkBlock);
 			///log.info("Track detected at " + checkBlock.getLocation().toString());
 			break trackSearch;
 		    }
@@ -391,41 +364,27 @@ public class CommandHook extends JavaPlugin implements Listener{
 	if (lastValue != trackNearby || !hadValue)
 	    if (trackNearby)
 		player.sendMessage("You have entered the safety of the tracks");
-	    else
-		player.sendMessage("You have left the safety of the tracks, and it pains you!");
-    }
-    
-    InventoryQueryResult checkPlayerInventory(Player player){
-	PlayerInventory inventory = player.getInventory();
-	InventoryQueryResult result = new InventoryQueryResult();
-	for (int i = 0; i < inventory.getSize(); i++) {
-	    ItemStack stack = inventory.getItem(i);
-	    if (stack != null){
-		if (isProvidedTrack(stack.getType())){
-		    if (stack.getType() == Material.RAILS && result.normalTrackSlotNum < 0)
-			result.normalTrackSlotNum = i;
-		    else if (stack.getType() == Material.POWERED_RAIL
-			    && result.boosterTrackSlotNum < 0)
-			result.boosterTrackSlotNum = i;
+	    else{
+		if (true){
+		    trackMaker.makeTrack(player, true);
 		}
-		if (stack.getAmount() > 0 && !result.playerHasItems)
-		    result.playerHasItems = true;
+		else{
+		    player.sendMessage("You have left the safety of the tracks, and it pains you!");
+		}
 	    }
-	}
-	return result;
     }
     
     void enforcePlayerHasTrack(Player player){
-	enforcePlayerHasTrack(player, checkPlayerInventory(player));
+	enforcePlayerHasTrack(player, Util.checkPlayerInventory(player));
     }
     
     void enforcePlayerHasTrack(Player player, InventoryQueryResult args){
 	PlayerInventory inventory = player.getInventory();
 	if (!args.playerHasItems)
-	    givePlayerTrack(player);
+	    Util.givePlayerTrack(player);
 	else{
 	    if (args.boosterTrackSlotNum < 0)
-		givePlayerBoosterTrack(player);
+		Util.givePlayerBoosterTrack(player);
 	    else{
 		ItemStack boosterStack = inventory.getItem(args.boosterTrackSlotNum);
 		for (Map.Entry<Integer, ? extends ItemStack> stack :
@@ -436,7 +395,7 @@ public class CommandHook extends JavaPlugin implements Listener{
 		boosterStack.setAmount(64);
 	    }
 	    if (args.normalTrackSlotNum < 0)
-		givePlayerStandardTrack(player);
+		Util.givePlayerStandardTrack(player);
 	    else{
 		ItemStack trackStack = inventory.getItem(args.normalTrackSlotNum);
 		for (Map.Entry<Integer, ? extends ItemStack> stack :
@@ -448,53 +407,5 @@ public class CommandHook extends JavaPlugin implements Listener{
 	    }
 	}
 	
-    }
-    
-    ArrayList<ItemStack> getHotBarItems(PlayerInventory inventory){
-	ArrayList<ItemStack> items = new ArrayList<ItemStack>(9);
-	for (int i = 0; i < 9; i++) {
-	    items.add(inventory.getItem(i));
-	}	
-	return items;
-    }
-
-    private void givePlayerStandardTrack(Player player){
-	player.getInventory().addItem(new ItemStack(Material.RAILS, 64));
-    }
-    
-    private void givePlayerBoosterTrack(Player player){
-	player.getInventory().addItem(new ItemStack(Material.POWERED_RAIL, 64));
-    }
-    private void givePlayerTrack(Player player) {
-	player.getInventory().addItem(new ItemStack(Material.RAILS, 64),
-				      new ItemStack(Material.POWERED_RAIL, 64));
-    }
-    
-    private double getFurthest(Location target, List<? extends Block> blocks){
-	double largest = 0;
-	Location absoluteTarget = target.clone();
-	absoluteValue(absoluteTarget);
-	for (Block block : blocks){
-	    Location diff = absoluteValue(block.getLocation().clone());
-	    Location result = absoluteValue(absoluteTarget.clone().subtract(diff));
-	    
-	    if (result.getX() > largest)
-		largest = result.getX();
-	    if (result.getY() > largest)
-		largest = result.getY();
-	    if (result.getY() > largest)
-		largest = result.getY();
-	}
-	return largest;
-    }
-    
-    private Location absoluteValue(Location location){
-	if (location.getX() < 0)
-	    location.setX(location.getX() * -1);
-	if (location.getY() < 0)
-	    location.setY(location.getY() * -1);
-	if (location.getZ() < 0)
-	    location.setZ(location.getZ() * -1);
-	return location;
     }
 }
