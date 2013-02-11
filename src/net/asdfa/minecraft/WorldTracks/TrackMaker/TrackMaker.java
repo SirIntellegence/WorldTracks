@@ -13,7 +13,9 @@ import net.asdfa.minecraft.WorldTracks.Util;
 import org.apache.commons.collections.buffer.PriorityBuffer;
 import org.apache.commons.collections.comparators.ComparableComparator;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 /**
@@ -52,7 +54,9 @@ public class TrackMaker {
 	    }
 	}
 	if (targetBlock != null){
-	    PriorityBuffer openList = new PriorityBuffer(ComparableComparator.
+	    boolean routeFound = false;
+	    PathNode resultNode = null;
+	    PriorityBuffer<PathNode> openList = new PriorityBuffer(ComparableComparator.
 		    comparableComparator());
 	    ArrayList<PathNode> closedList = new ArrayList<PathNode>();
 	    Location start = player.getLocation().clone();
@@ -65,6 +69,27 @@ public class TrackMaker {
 	    if (CommandHook.debug)
 		player.sendMessage("H was " + startingNode.getH());
 	    openList.add(startingNode);
+	    SearchMain:
+	    while (!routeFound){
+		PathNode current = (PathNode)openList.remove();
+		closedList.add(current);
+		List<PathNode> potentionals = current.getPotentionals(closedList, openList);
+		for (PathNode node : potentionals) {
+		    if (node.getH() < 0){ // calculate H
+			node.setH(calculateH(targetBlock.getLocation(), node.getAssosiatedBlock().getLocation()));
+			if (node.getH() == 0){ // we have arrived!
+			    resultNode = node;
+			    routeFound = true;
+			    break SearchMain;			    
+			}
+		    }
+		}
+		openList.addAll(potentionals);
+	    }
+	    if (routeFound){
+		buildTrack(resultNode);
+		lastTrackBlockNearby.put(player, startingNode.getAssosiatedBlock());
+	    }
 	}
 	else{
 	    if (isFromAuto)
@@ -79,9 +104,27 @@ public class TrackMaker {
     int calculateH(Location start, Location end){
 	Location location = Util.getDistanceInbeetween(start, end);
 	Vector vector = location.toVector();
+	//return (int)Math.floor(vector.length() * 10);
 	double hight = vector.getY();
 	vector.setY(0);
 	double length = vector.length();
 	return (int)(Math.floor(length * 10) + hight * 50);
+    }
+
+    private void buildTrack(PathNode resultNode) {
+	for (PathNode node : resultNode) {
+	    Block targetBlock = node.getAssosiatedBlock();
+	    if (node.getPenalty() != 0) { //we need to modify the surroundings...
+		Block below = targetBlock.getRelative(BlockFace.DOWN);
+		if (below.isLiquid() || Util.isAirEquivalent(below.getType())){
+		    below.setType(Material.COBBLESTONE);
+		}
+		Block above = targetBlock.getRelative(BlockFace.UP);
+		if (!Util.isAirEquivalent(above.getType()))
+		    above.setType(Material.AIR);
+	    }
+	    // construct track
+	    targetBlock.setType(Material.RAILS);
+	}
     }
 }

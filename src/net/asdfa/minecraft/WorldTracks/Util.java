@@ -5,7 +5,11 @@
 package net.asdfa.minecraft.WorldTracks;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
+import net.asdfa.minecraft.WorldTracks.TrackMaker.PathNode;
+import org.apache.commons.collections.buffer.PriorityBuffer;
 import org.apache.commons.lang.NullArgumentException;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -174,8 +178,84 @@ public final class Util {
 	return absoluteValue(first.clone().subtract(second));
     }
 
-    public static boolean isNaturalType(Material type) {
-	throw new UnsupportedOperationException("Not yet implemented");
+    public static List<PathNode> getExistingPathNodesFromBlockList(List<Block>
+	    blocks, Collection<PathNode> openList) {
+	List<PathNode> nodes = new ArrayList<PathNode>();
+	NodeLoop:
+	for (PathNode node : openList) {
+	    for (Iterator<Block> blockIt = blocks.iterator(); blockIt.hasNext();) {
+		Block block = blockIt.next();
+		if (blocksEquivalent(block, node.getAssosiatedBlock())){
+		    nodes.add(node);
+		    blockIt.remove();
+		    continue NodeLoop;
+		}
+	    }
+	}
+	return nodes;
     }
+    
+    public static boolean blocksEquivalent(Block a, Block b){
+	if (a == b)
+	    return true;
+	Location locationA = a.getLocation();
+	Location locationB = b.getLocation();
+	if (locationA.getWorld().getName().equals(locationB.getWorld().getName())){
+	    if (locationA.getBlockX() == locationB.getBlockX() &&
+		    locationA.getBlockY() == locationB.getBlockY() &&
+		    locationA.getBlockZ() == locationB.getBlockZ())
+		return true;
+	}
+	
+	return false;
+    }
+
+    /**
+     * Determine if the Provided type, for all we care, is air
+     * @param type
+     * @return
+     */
+    public static boolean isAirEquivalent(Material type) {
+	if (isBlockTypeTrack(type))
+	    return true;
+	switch (type) {
+	    case AIR:
+	    case SNOW:
+	    case LONG_GRASS:
+	    case WEB:
+	    case LEVER:
+	    case STONE_BUTTON:
+	    case WOOD_BUTTON:
+	    case REDSTONE:
+	    case REDSTONE_TORCH_OFF:
+	    case REDSTONE_TORCH_ON:
+	    case REDSTONE_WIRE:
+	    case TRIPWIRE:
+	    case TRIPWIRE_HOOK:
+	    case CARROT:
+	    case CROPS:
+	    case COCOA:
+	    case RED_ROSE:
+	    case YELLOW_FLOWER:
+	    case MELON_STEM:
+	    case RED_MUSHROOM:
+	    case BROWN_MUSHROOM:
+	    case SUGAR_CANE_BLOCK:
+	    case SAPLING:
+	    case WHEAT:
+	    case VINE:
+	    case FIRE:
+	    case SIGN:
+	    case SIGN_POST:
+	    case TORCH:
+	    case NETHER_WARTS:
+	    case DRAGON_EGG:
+		return true;
+	    default:
+		return false;
+	}
+    }
+
+    
     
 }

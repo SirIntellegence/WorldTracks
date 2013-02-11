@@ -47,7 +47,7 @@ import org.bukkit.util.Vector;
 public class CommandHook extends JavaPlugin implements Listener{
     static final Logger log = Logger.getLogger("minecraft");
     public static final boolean debug = true;
-    ConsoleCommandSender console;// = getServer().getConsoleSender();
+    static ConsoleCommandSender console;// = getServer().getConsoleSender();
     
     
     private FileConfiguration customConfig = null;
@@ -349,8 +349,7 @@ public class CommandHook extends JavaPlugin implements Listener{
 					 k + to.getBlockZ());
 		    trackNearby = Util.isTrackBlock(checkBlock);
 		    if (trackNearby){
-			if (!trackMaker.lastTrackBlockNearby.containsKey(player))
-			    trackMaker.lastTrackBlockNearby.put(player, checkBlock);
+			trackMaker.lastTrackBlockNearby.put(player, checkBlock);
 			///log.info("Track detected at " + checkBlock.getLocation().toString());
 			break trackSearch;
 		    }
@@ -366,6 +365,8 @@ public class CommandHook extends JavaPlugin implements Listener{
 		player.sendMessage("You have entered the safety of the tracks");
 	    else{
 		if (true){
+		    if (debug)
+			player.sendMessage("You have left the safety of the tracks, and it pains you!");
 		    trackMaker.makeTrack(player, true);
 		}
 		else{
@@ -407,5 +408,10 @@ public class CommandHook extends JavaPlugin implements Listener{
 	    }
 	}
 	
+    }
+    
+    public static void printDebugMessage(String message){
+	if (debug)
+	    console.sendMessage(message);
     }
 }
