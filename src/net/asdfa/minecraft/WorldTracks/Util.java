@@ -9,7 +9,7 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import net.asdfa.minecraft.WorldTracks.TrackMaker.PathNode;
-import org.apache.commons.collections.buffer.PriorityBuffer;
+//import org.apache.commons.collections.buffer.PriorityBuffer;
 import org.apache.commons.lang.NullArgumentException;
 import org.bukkit.Location;
 import org.bukkit.Material;
