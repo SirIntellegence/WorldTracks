@@ -49,6 +49,7 @@ public class CommandHook extends JavaPlugin implements Listener {
 	static final Logger log = Logger.getLogger("minecraft");
 	public static final boolean debug = true;
 	static ConsoleCommandSender console;// = getServer().getConsoleSender();
+	public static CommandHook instance;
 
 	private FileConfiguration customConfig = null;
 	private File customConfigFile = null;
@@ -60,6 +61,7 @@ public class CommandHook extends JavaPlugin implements Listener {
 
 	@Override
 	public void onEnable() {
+		instance = this;
 		PluginManager pm = this.getServer().getPluginManager();
 		pm.registerEvents(this, this);
 		PluginDescriptionFile pdfFile = this.getDescription();
@@ -79,8 +81,8 @@ public class CommandHook extends JavaPlugin implements Listener {
 	}
 
 	void hurtPlayers() {
-		int hurtAmount = getConfig().getInt("proximity.hurtAmount", 1);
-		int healAmount = getConfig().getInt("proximity.healAmount", 1);
+		double hurtAmount = getConfig().getDouble("proximity.hurtAmount", 1);
+		double healAmount = getConfig().getDouble("proximity.healAmount", 1);
 
 		for (Player p : playerProximity.keySet()) {
 			if (!playerProximity.get(p)) {
@@ -312,7 +314,7 @@ public class CommandHook extends JavaPlugin implements Listener {
 				player.getInventory().remove(cursor.getType());
 				if (cursor.getAmount() < 64) {
 					cursor.setAmount(64);
-					args.setCursor(cursor);
+					args.setCurrentItem(cursor);
 				}
 			}
 		}
@@ -406,7 +408,7 @@ public class CommandHook extends JavaPlugin implements Listener {
 				for (Map.Entry<Integer, ? extends ItemStack> stack
 						: inventory.all(Material.POWERED_RAIL).entrySet()) {
 					if (stack.getValue() != boosterStack) {
-						inventory.remove(stack.getKey());
+						inventory.remove(stack.getValue());
 					}
 				}
 				boosterStack.setAmount(64);
@@ -418,7 +420,7 @@ public class CommandHook extends JavaPlugin implements Listener {
 				for (Map.Entry<Integer, ? extends ItemStack> stack
 						: inventory.all(Material.RAILS).entrySet()) {
 					if (stack.getValue() != trackStack) {
-						inventory.remove(stack.getKey());
+						inventory.remove(stack.getValue());
 					}
 				}
 				trackStack.setAmount(64);

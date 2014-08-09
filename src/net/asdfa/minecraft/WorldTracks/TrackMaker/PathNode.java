@@ -16,17 +16,16 @@ import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 
-/**
- *
- * @author austin
- */
+
 public class PathNode implements Comparable<PathNode>, Iterable<PathNode> {
 
 	private double _cachedF = -1;
-	private static final double AIR_PENALTY = 50d;
+	private static final double AIR_PENALTY = 75d;
 	private static final double LIQUID_UNDER_PENALTY = 10d;
 	private static final double LIQUID_THROUGH_PENALTY = Double.NaN; //not yet implemented
 	private static final double TUNNEL_PENALTY = 25d;
+	public static final int SURROUNDING_BLOCK_COUNT = 12;
+
 	/*
 	 * Movement cost from the starting point
 	 */
@@ -53,15 +52,15 @@ public class PathNode implements Comparable<PathNode>, Iterable<PathNode> {
 			// can't go through bedrock
 			valid = false;
 		}
-//		if (assosiatedBlock.isLiquid()) {
-//	    // they might be swimming, check to see if the block above is air
-//			// and, if so, set assosiatedBlock to it
-//			Block above = assosiatedBlock.getRelative(BlockFace.UP);
-//			if (above != null && above.getType() == Material.AIR) {
-//				assosiatedBlock = above;
-//				CommandHook.printDebugMessage("Bumped associated block since player may be swimming");
-//			}
-//		}
+		if (assosiatedBlock.isLiquid()) {
+	    // they might be swimming, check to see if the block above is air
+			// and, if so, set assosiatedBlock to it
+			Block above = assosiatedBlock.getRelative(BlockFace.UP);
+			if (above != null && above.getType() == Material.AIR) {
+				assosiatedBlock = above;
+				//CommandHook.printDebugMessage("Bumped associated block since player may be swimming");
+			}
+		}
 
 		penalty = 0;
 		Block blockUnder = assosiatedBlock.getRelative(BlockFace.DOWN);
@@ -69,6 +68,15 @@ public class PathNode implements Comparable<PathNode>, Iterable<PathNode> {
 			// there is no block under
 			valid = false;
 			return;
+		}
+		//check to see if any parent nodes are under
+		for (PathNode node : this){
+			if (Util.blocksEquivalent(blockUnder, node.getAssosiatedBlock())
+					|| Util.blocksEquivalent(blockUnder.getRelative(BlockFace.DOWN, 2),
+							node.getAssosiatedBlock())){
+				valid = false;
+				return;
+			}
 		}
 		Block blockOver = assosiatedBlock.getRelative(BlockFace.UP);
 		Block[] blockCheck = new Block[]{blockUnder, assosiatedBlock, blockOver};
@@ -206,8 +214,96 @@ public class PathNode implements Comparable<PathNode>, Iterable<PathNode> {
 
 	List<PathNode> getPotentionals(ArrayList<PathNode> closedList,
 			PriorityQueue<PathNode> openList) {
+		List<Block> surrounding = getPotentionals();
+		boolean checkStraight = false;
+		boolean isX = false;
+		int coordVal = 0;
+		Block prev;
+		if (getParent() == null){
+			// try to find a previous track
+			List<Block> trackBlocks = new ArrayList<>(SURROUNDING_BLOCK_COUNT);
+			Util.getTrackBlocksInList(surrounding, trackBlocks);
+			if (trackBlocks.isEmpty())
+				prev = null;
+			else if (trackBlocks.size() == 1){
+				prev = trackBlocks.get(0);
+			}
+			else{
+				// choose one of them...
+				//for now, grab the first
+				prev = trackBlocks.get(0);
+			}
+		}
+		else
+			prev = getParent().assosiatedBlock;
+
+		if (prev != null){
+			isX = prev.getX() == assosiatedBlock.getX();
+			if (isX){
+				coordVal = assosiatedBlock.getX();
+			}
+			else{
+				coordVal = assosiatedBlock.getZ();
+			}
+			checkStraight = prev.getY() != assosiatedBlock.getY();
+			for(Iterator<Block> it = surrounding.iterator(); it.hasNext();){
+				Block item = it.next();
+				boolean sameLevel = item.getY() == assosiatedBlock.getY();
+				// must be a straight line
+				boolean passes;
+				if (isX){
+					passes = item.getX() == coordVal;
+				}
+				else{
+					passes = item.getZ() == coordVal;
+				}
+				if (!passes && (checkStraight || !sameLevel))
+					it.remove();
+			}
+		}
+		List<PathNode> itemsInOpenList = Util.getExistingPathNodesFromBlockList(
+				surrounding, openList);
+		List<PathNode> itemsInClosedList = Util.getExistingPathNodesFromBlockList(
+				surrounding, closedList);
+		List<PathNode> refreshList = new ArrayList<>(SURROUNDING_BLOCK_COUNT);
+		for (PathNode openNode : itemsInOpenList) {
+			if (checkStraight){
+				Block item = openNode.assosiatedBlock;
+				// must be a straight line
+				boolean sameLevel = item.getY() == assosiatedBlock.getY();
+				// must be a straight line
+				boolean passes;
+				if (isX){
+					passes = item.getX() == coordVal;
+				}
+				else{
+					passes = item.getZ() == coordVal;
+				}
+				if (!passes && (checkStraight || !sameLevel))
+					continue;
+			}
+			if (g + 1 < openNode.getG()) { // if it takes less effort to get there from here, set this as it's parent
+				openNode.setParent(this);
+				refreshList.add(openNode);
+			}
+		}
+		if (refreshList.size() > 0) {
+			openList.removeAll(refreshList);
+			//openList.addAll(refreshList); they will get added back later
+		}
+		List<PathNode> returnList = new ArrayList<>(surrounding.size());
+		for (Block block : surrounding) {
+			PathNode item = new PathNode(this);
+			item.setAssosiatedBlock(block);
+			returnList.add(item);
+		}
+		returnList.addAll(refreshList);
+		return returnList;
+	}
+
+	List<Block> getPotentionals() {
 		// obtain the raw blocks
-		List<Block> surrounding = new ArrayList<Block>();
+		List<Block> surrounding = new ArrayList<>(SURROUNDING_BLOCK_COUNT);
 		Block[] checkBlock = new Block[]{
 			assosiatedBlock.getRelative(BlockFace.DOWN),
 			assosiatedBlock,
@@ -219,30 +315,9 @@ public class PathNode implements Comparable<PathNode>, Iterable<PathNode> {
 			surrounding.add(block.getRelative(BlockFace.SOUTH));
 			surrounding.add(block.getRelative(BlockFace.WEST));
 		}
-		List<PathNode> itemsInOpenList = Util.getExistingPathNodesFromBlockList(
-				surrounding, openList);
-		List<PathNode> itemsInClosedList = Util.getExistingPathNodesFromBlockList(
-				surrounding, closedList);
-		List<PathNode> refreshList = new ArrayList<PathNode>();
-		for (PathNode openNode : itemsInOpenList) {
-			if (g + 1 < openNode.getG()) { // if it takes less effort to get there from here, set this as it's parent
-				openNode.setParent(this);
-				refreshList.add(openNode);
-			}
-		}
-		if (refreshList.size() > 0) {
-			openList.removeAll(refreshList);
-			//openList.addAll(refreshList); they will get added back later
-		}
-		List<PathNode> returnList = new ArrayList<PathNode>();
-		for (Block block : surrounding) {
-			PathNode item = new PathNode(this);
-			item.setAssosiatedBlock(block);
-			returnList.add(item);
-		}
-		returnList.addAll(refreshList);
-		return returnList;
+		return surrounding;
 	}
+	
 
 	@Override
 	/**

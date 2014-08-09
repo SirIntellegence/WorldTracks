@@ -5,6 +5,7 @@
 package net.asdfa.minecraft.WorldTracks.TrackMaker;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.PriorityQueue;
@@ -19,16 +20,23 @@ import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 
-/**
- *
- * @author austin
- */
+
 public class TrackMaker {
 
 	public TrackMaker() {
 	}
-
+	static final int BOOST_INTERVAL = 5;
 	public final HashMap<Player, Block> lastTrackBlockNearby = new HashMap<Player, Block>();
+
+	static boolean canTurn(Block target, Block prev, Block next) {
+		if (prev == null || next == null)
+			return true;
+		//implementation for now....
+		if (target.getY() != prev.getY() || target.getY() != next.getY()){
+			return false;
+		}
+		return true;
+	}
 
 	/**
 	 * Generates track to the player's position
@@ -50,6 +58,9 @@ public class TrackMaker {
 		Block targetBlock = null;
 		if (isFromAuto) {
 			targetBlock = lastTrackBlockNearby.get(player);
+			if (!Util.isTrackBlock(targetBlock)){
+				targetBlock = null;
+			}
 		}
 		if (targetBlock == null) {
 			List<Block> blocksLookedAt;
@@ -64,8 +75,13 @@ public class TrackMaker {
 			PathNode resultNode = null;
 //	    PriorityBuffer<PathNode> openList = new PriorityBuffer(ComparableComparator.
 //		    comparableComparator());
-			PriorityQueue<PathNode> openList = new PriorityQueue<PathNode>(200);
-			ArrayList<PathNode> closedList = new ArrayList<PathNode>();
+			int giveupCount;
+			if (isFromAuto)
+				giveupCount = 1 << 10;
+			else
+				giveupCount = 1 << 12;
+			PriorityQueue<PathNode> openList = new PriorityQueue<>(200);
+			ArrayList<PathNode> closedList = new ArrayList<>(20);
 			Location start = player.getLocation().clone();
 			PathNode startingNode = new PathNode();
 			startingNode.setAssosiatedBlock(start.getBlock());
@@ -94,7 +110,7 @@ public class TrackMaker {
 					}
 				}
 				openList.addAll(potentionals);
-				if (openList.size() > 1 << 10)
+				if (openList.size() > giveupCount)
 					break;
 			}
 			if (routeFound) {
@@ -127,6 +143,8 @@ public class TrackMaker {
 	}
 
 	private void buildTrack(PathNode resultNode) {
+		int boostCount = 5;
+		Block prev = null;
 		for (PathNode node : resultNode) {
 			Block targetBlock = node.getAssosiatedBlock();
 			if (node.getPenalty() != 0) { //we need to modify the surroundings...
@@ -139,8 +157,139 @@ public class TrackMaker {
 					above.setType(Material.AIR);
 				}
 			}
+			if (!Util.isTrackBlock(targetBlock)){
 			// construct track
-			targetBlock.setType(Material.RAILS);
+			// boost type?
+				Material trackType = Material.RAILS;
+				if (boostCount > 5){
+					boolean leverPlaced = placeLever(node, prev);
+					if (leverPlaced){
+						trackType = Material.POWERED_RAIL;
+						boostCount = 0;
+					}
+				}
+				targetBlock.setType(trackType);
+			}
+			prev = targetBlock;
+			boostCount++;
 		}
+	}
+
+	private boolean placeLever(PathNode node, Block prev) {
+		//final Material switchType = Material.LEVER;
+		final Material switchType = Material.REDSTONE_TORCH_ON;
+		// is this section straight?
+		boolean straight;
+		boolean isX = true;
+		if (prev == null){
+			// find it!
+			List<Block> tracks = new ArrayList<>(PathNode.SURROUNDING_BLOCK_COUNT);
+			Util.getTrackBlocksInList(node.getPotentionals(), tracks);
+			if (!tracks.isEmpty()){
+				if (tracks.size() == 1)
+					prev = tracks.get(0);
+				else{
+					//grab the first for now
+					prev = tracks.get(0);
+				}
+			}
+		}
+		if (prev == null || node.getParent() == null){
+			straight = true;
+		}
+		else{
+//			boolean canTurn = canTurn(node.getAssosiatedBlock(), prev,
+//					node.getParent().getAssosiatedBlock());
+
+			if (prev.getX() == node.getAssosiatedBlock().getX() &&
+					prev.getX() == node.getParent().getAssosiatedBlock().getX()){
+				straight = true;
+				isX = true;
+			}
+			else if (prev.getZ() == node.getAssosiatedBlock().getZ() &&
+					prev.getZ() == node.getParent().getAssosiatedBlock().getZ()){
+				straight = true;
+				isX = false;
+			}
+			else {
+				straight = false;
+			}
+		}
+		if (!straight)
+			return false;
+		// find block to place leaver on
+		Block lever = null;
+		Block curr = node.getAssosiatedBlock();
+		if (curr.isBlockPowered() || curr.isBlockIndirectlyPowered()){
+			//dont need leaver
+			return true;
+		}
+		// note: z = North/south
+		BlockFace a, b;
+		if (isX){
+			a = BlockFace.EAST;
+			b = BlockFace.WEST;
+		}
+		else{
+			a = BlockFace.NORTH;
+			b = BlockFace.SOUTH;
+		}
+		List<Block> potentionals = new ArrayList<>(5);
+		potentionals.add(curr.getRelative(a));
+		potentionals.add(curr.getRelative(b));
+		potentionals.add(curr.getRelative(BlockFace.UP));
+//		potentionals.add(curr.getRelative(BlockFace.UP).getRelative(b));
+//		potentionals.add(curr.getRelative(BlockFace.UP).getRelative(a));
+
+		Outer:
+		for (Block item : potentionals){
+			if (!Util.isAirEquivalent(item.getType())){
+				continue;
+			}
+			List<Block> directions = Arrays.asList(
+					item.getRelative(BlockFace.UP),
+					item.getRelative(BlockFace.DOWN),
+					item.getRelative(BlockFace.NORTH),
+					item.getRelative(BlockFace.EAST),
+					item.getRelative(BlockFace.SOUTH),
+					item.getRelative(BlockFace.WEST)
+			);
+			boolean hasMount = false;
+			for (Block block : directions) {
+				if (block != curr && !Util.isAirEquivalent(block.getType())
+						&& !block.isLiquid() && !Util.isTrackBlock(block)){
+					lever = item;
+					break Outer;
+				}
+			}
+		}
+		if (lever == null){
+			Block target = potentionals.get(0);
+			Block below = target.getRelative(BlockFace.DOWN);
+			if (below != null && (below.isLiquid() || Util.isAirEquivalent(
+					below.getType()))){
+				below.setType(Material.COBBLESTONE);
+				lever = target;
+			}
+		}
+		if (lever == null)
+			return false;
+		final Block result = lever;
+		CommandHook.instance.getServer().getScheduler().
+				scheduleSyncDelayedTask(CommandHook.instance, new Runnable() {
+				@Override
+				public void run() {
+					result.setType(switchType);
+					if (switchType == Material.LEVER)
+						result.setData((byte) (result.getData() | 0x8));    // set ON bit
+					if (result.getType() != switchType){
+						// this happens some times
+						result.setType(switchType);
+					}
+				}
+			});
+//		lever.setType(switchType);
+		// Switch lever on.
+		return true;
 	}
 }
