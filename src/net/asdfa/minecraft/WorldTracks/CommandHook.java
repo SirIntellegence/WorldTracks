@@ -404,25 +404,25 @@ public class CommandHook extends JavaPlugin implements Listener {
 			if (args.boosterTrackSlotNum < 0) {
 				Util.givePlayerBoosterTrack(player);
 			} else {
-				ItemStack boosterStack = inventory.getItem(args.boosterTrackSlotNum);
 				for (Map.Entry<Integer, ? extends ItemStack> stack
 						: inventory.all(Material.POWERED_RAIL).entrySet()) {
-					if (stack.getValue() != boosterStack) {
+//					if (stack.getValue() != boosterStack) {
 						inventory.remove(stack.getValue());
-					}
+//					}
 				}
+				ItemStack boosterStack = inventory.getItem(args.boosterTrackSlotNum);
 				boosterStack.setAmount(64);
 			}
 			if (args.normalTrackSlotNum < 0) {
 				Util.givePlayerStandardTrack(player);
 			} else {
-				ItemStack trackStack = inventory.getItem(args.normalTrackSlotNum);
 				for (Map.Entry<Integer, ? extends ItemStack> stack
 						: inventory.all(Material.RAILS).entrySet()) {
-					if (stack.getValue() != trackStack) {
+//					if (stack.getValue() != trackStack) {
 						inventory.remove(stack.getValue());
-					}
+//					}
 				}
+				ItemStack trackStack = inventory.getItem(args.normalTrackSlotNum);
 				trackStack.setAmount(64);
 			}
 		}

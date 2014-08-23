@@ -27,6 +27,7 @@ public class TrackMaker {
 	}
 	static final int BOOST_INTERVAL = 5;
 	public final HashMap<Player, Block> lastTrackBlockNearby = new HashMap<Player, Block>();
+	static final int AIR_HEIGHT_LIMIT = 3;
 
 	static boolean canTurn(Block target, Block prev, Block next) {
 		if (prev == null || next == null)
@@ -84,42 +85,65 @@ public class TrackMaker {
 			ArrayList<PathNode> closedList = new ArrayList<>(20);
 			Location start = player.getLocation().clone();
 			PathNode startingNode = new PathNode();
-			startingNode.setAssosiatedBlock(start.getBlock());
-			if (Util.isTrackBlock(startingNode.getAssosiatedBlock())) {
-				return; // allready done
+			Block startBlock = start.getBlock();
+			CommandHook.printDebugMessage("Start was is " + startBlock.toString());
+			// is the player in the air?
+			int moves = 0;
+			while (startBlock.getType() == Material.AIR && startBlock.
+					getRelative(BlockFace.DOWN) != null){
+				startBlock = startBlock.getRelative(BlockFace.DOWN);
+				CommandHook.printDebugMessage("Block below start is of type " +
+						startBlock.getType());
+				moves++;
 			}
-			startingNode.setValues(0, calculateH(start, targetBlock.
-					getLocation()));
-			if (CommandHook.debug) {
-				player.sendMessage("H was " + startingNode.getH());
+			String errorMessage = "";
+			moves--;
+			if (moves > AIR_HEIGHT_LIMIT){
+				//give up
+				errorMessage = "You are too high.";
 			}
-			openList.add(startingNode);
-			SearchMain:
-			while (!routeFound) {
-				PathNode current = openList.remove();
-				closedList.add(current);
-				List<PathNode> potentionals = current.getPotentionals(closedList, openList);
-				for (PathNode node : potentionals) {
-					if (node.getH() < 0) { // calculate H
-						node.setH(calculateH(targetBlock.getLocation(), node.getAssosiatedBlock().getLocation()));
-						if (node.getH() == 0) { // we have arrived!
-							resultNode = node;
-							routeFound = true;
-							break SearchMain;
+			startBlock = startBlock.getRelative(BlockFace.UP);
+			CommandHook.printDebugMessage("Start block is " + startBlock.toString());
+			if (errorMessage.isEmpty()){
+				startingNode.setAssosiatedBlock(startBlock);
+				if (Util.isTrackBlock(startingNode.getAssosiatedBlock())) {
+					return; // allready done
+				}
+				startingNode.setValues(0, calculateH(start, targetBlock.
+						getLocation()));
+				if (CommandHook.debug) {
+					player.sendMessage("H was " + startingNode.getH());
+				}
+				openList.add(startingNode);
+				SearchMain:
+				while (!routeFound) {
+					PathNode current = openList.remove();
+					closedList.add(current);
+					List<PathNode> potentionals = current.getPotentionals(closedList, openList);
+					for (PathNode node : potentionals) {
+						if (node.getH() < 0) { // calculate H
+							node.setH(calculateH(targetBlock.getLocation(), node.getAssosiatedBlock().getLocation()));
+							if (node.getH() == 0) { // we have arrived!
+								resultNode = node;
+								routeFound = true;
+								break SearchMain;
+							}
 						}
 					}
+					openList.addAll(potentionals);
+					if (closedList.size() > giveupCount){
+						errorMessage = "Are you reachable?";
+						break;
+					}
 				}
-				openList.addAll(potentionals);
-				if (openList.size() > giveupCount)
-					break;
 			}
 			if (routeFound) {
 				buildTrack(resultNode);
 				lastTrackBlockNearby.put(player, startingNode.getAssosiatedBlock());
 			}
 			else{
-				player.sendMessage("Unable to construct track to you. Are you "
-						+ "reachable?");
+				player.sendMessage("Unable to construct track to you. " +
+						errorMessage);
 			}
 		} else {
 			if (isFromAuto) {
@@ -145,6 +169,17 @@ public class TrackMaker {
 	private void buildTrack(PathNode resultNode) {
 		int boostCount = 5;
 		Block prev = null;
+		// try to find the previous one
+		List<Block> potentionalParents = resultNode.getPotentionals();
+		List<Block> surroundingTrackBlocks = new ArrayList<>(10);
+		Util.getTrackBlocksInList(potentionalParents, surroundingTrackBlocks);
+		if (surroundingTrackBlocks.size() == 1){
+			prev = surroundingTrackBlocks.get(0);
+		}
+		else if (!surroundingTrackBlocks.isEmpty()){
+			// grab the first for now
+			prev = surroundingTrackBlocks.get(0);
+		}
 		for (PathNode node : resultNode) {
 			Block targetBlock = node.getAssosiatedBlock();
 			if (node.getPenalty() != 0) { //we need to modify the surroundings...

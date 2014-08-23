@@ -23,7 +23,7 @@ public class PathNode implements Comparable<PathNode>, Iterable<PathNode> {
 	private static final double AIR_PENALTY = 75d;
 	private static final double LIQUID_UNDER_PENALTY = 10d;
 	private static final double LIQUID_THROUGH_PENALTY = Double.NaN; //not yet implemented
-	private static final double TUNNEL_PENALTY = 25d;
+	private static final double TUNNEL_PENALTY = 75d;
 	public static final int SURROUNDING_BLOCK_COUNT = 12;
 
 	/*
