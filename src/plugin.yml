@@ -1,6 +1,6 @@
-name: World Tracks
+name: World_Tracks
 main: net.asdfa.minecraft.WorldTracks.CommandHook
-version: 0.3
+version: 0.4
 
 commands:
   WT:
